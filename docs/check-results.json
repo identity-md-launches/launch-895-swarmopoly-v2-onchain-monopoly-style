@@ -4,8 +4,8 @@
   "forgeBuild": "pass",
   "forgeTest": "pass",
   "forgeFmtCheck": "pass",
-  "foundryReportedTests": 29,
-  "unitAndFuzzTests": 28,
+  "foundryReportedTests": 40,
+  "unitAndFuzzTests": 39,
   "fuzzRunsPerTest": 256,
   "invariantPredicates": 4,
   "invariantRuns": 128,
@@ -16,9 +16,11 @@
   "siteSyntax": "pass",
   "runtimeBytes": {
     "SeasonPot": 1831,
-    "DeedVault": 9660,
-    "SwarmopolyGame": 13632
+    "DeedVault": 9661,
+    "SwarmopolyGame": 13723
   },
   "liveDeployment": false,
-  "independentAudit": false
+  "independentAudit": false,
+  "revisionRegressionTests": 11,
+  "suppliedZeroScoreProof": "failed before revision; passed unchanged after revision (run separately under test/scratch)"
 }

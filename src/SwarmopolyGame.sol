@@ -159,12 +159,11 @@ contract SwarmopolyGame is Owned, ReentrancyGuard {
         if (p.season == currentSeason) revert Invalid();
         if (rolls[msg.sender].commitment != bytes32(0)) revert PendingRoll();
         p.season = currentSeason;
-        p.nextRoll = 0;
         p.position = 0;
         p.jailed = false;
         p.bankrupt = false;
         p.canBuy = false;
-        // parkingDay and nonce persist to prevent daily/replay resets at season boundaries.
+        // nextRoll, parkingDay and nonce persist across season boundaries.
         uint256 amount = seasons[currentSeason].buyIn;
         if (amount != 0) {
             currency.safeTransferFrom(msg.sender, address(pot), amount);
@@ -401,6 +400,7 @@ contract SwarmopolyGame is Owned, ReentrancyGuard {
 
     function _score(address who, uint256 amount) private {
         uint256 score = scores[currentSeason][who] + amount;
+        if (score == 0) return;
         scores[currentSeason][who] = score;
         address[10] storage list = _leaders[currentSeason];
         uint256 index = 10;
@@ -441,7 +441,7 @@ contract SwarmopolyGame is Owned, ReentrancyGuard {
         uint256 total;
         for (uint256 i; i < 10; ++i) {
             address winner = _leaders[currentSeason][i];
-            if (winner == address(0)) continue;
+            if (winner == address(0) || scores[currentSeason][winner] == 0) continue;
             uint256 amount = Math.mulDiv(budget, weights[i], 100);
             prizes[currentSeason][winner] = amount;
             total += amount;

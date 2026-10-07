@@ -169,6 +169,7 @@ contract AccountingInvariants is StdInvariant, SwarmopolyFixture {
         address[10] memory list = game.leaders(season);
         for (uint256 i; i < 10; ++i) {
             if (list[i] == address(0)) continue;
+            assertGt(game.scores(season, list[i]), 0);
             for (uint256 j = i + 1; j < 10; ++j) {
                 assertTrue(list[i] != list[j]);
             }

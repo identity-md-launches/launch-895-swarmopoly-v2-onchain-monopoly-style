@@ -100,9 +100,10 @@ contract DeedVault is Owned, ReentrancyGuard {
         return (t.token, t.tier, t.weight);
     }
 
-    /// @notice Listings are permanent, including after the last deed is redeemed.
+    /// @notice A listing can change only after all deed assets and sponsor liabilities are cleared.
     function listTile(uint8 slot, PoolKey calldata key, uint8 tier) external onlyGame {
-        if (!isProperty(slot) || _tiles[slot].token != address(0) || tier < 1 || tier > 8) revert Invalid();
+        Tile storage t = _tiles[slot];
+        if (!isProperty(slot) || t.assets != 0 || t.shares != 0 || sponsorLiability[slot] != 0 || tier < 1 || tier > 8) revert Invalid();
         if (
             key.currency0 == address(0) || key.currency0 >= key.currency1 || key.tickSpacing <= 0
                 || key.tickSpacing > 32767 || (key.fee > 1_000_000 && key.fee != 0x800000)
@@ -110,9 +111,10 @@ contract DeedVault is Owned, ReentrancyGuard {
         if (key.currency0 != address(currency) && key.currency1 != address(currency)) revert Invalid();
         address token = key.currency0 == address(currency) ? key.currency1 : key.currency0;
         if (token.code.length == 0 || (key.hooks != address(0) && key.hooks.code.length == 0)) revert Invalid();
-        _tiles[slot].key = key;
-        _tiles[slot].token = token;
-        _tiles[slot].tier = tier;
+        // Preserve rent accumulators so redeemed deeds can still claim their earned IMD.
+        t.key = key;
+        t.token = token;
+        t.tier = tier;
         emit TileListed(slot, key, tier);
     }
 
@@ -271,14 +273,14 @@ contract DeedVault is Owned, ReentrancyGuard {
         emit Redeemed(id, assets);
     }
 
-    /// @dev One sponsor per tile per season, so landing never iterates a user-grown list.
+    /// @dev One funded sponsor at a time; an exhausted sponsorship can be replaced in O(1).
     function sponsorTile(uint8 slot, uint256 amount, uint256 perLanding) external nonReentrant {
         if (
             currentSeason == 0 || block.timestamp >= seasonEnd[currentSeason] || _tiles[slot].token == address(0)
                 || amount == 0 || perLanding == 0
         ) revert Invalid();
         Sponsorship storage s = sponsors[currentSeason][slot];
-        if (s.sponsor != address(0) && (s.sponsor != msg.sender || s.perLanding != perLanding)) revert Invalid();
+        if (s.remaining != 0 && (s.sponsor != msg.sender || s.perLanding != perLanding)) revert Invalid();
         s.sponsor = msg.sender;
         s.remaining += amount;
         s.perLanding = perLanding;

@@ -122,7 +122,7 @@ contract SwarmopolyTest is SwarmopolyFixture {
         vm.stopPrank();
     }
 
-    function testBoardAndImmutableListing() public {
+    function testBoardAndFundedListingRestrictions() public {
         uint256 count;
         for (uint8 i; i < 40; ++i) {
             if (vault.isProperty(i)) ++count;
@@ -130,6 +130,7 @@ contract SwarmopolyTest is SwarmopolyFixture {
         assertEq(count, 28);
         vm.expectRevert();
         game.listTile(0, key, 1);
+        _buy(alice, 1 ether, 0);
         vm.expectRevert();
         game.listTile(6, key, 2);
         vm.expectRevert();
@@ -369,18 +370,29 @@ contract SwarmopolyTest is SwarmopolyFixture {
         for (uint160 i = 1; i <= 10; ++i) {
             _join(address(i));
         }
+        for (uint160 i = 1; i <= 10; ++i) {
+            _roll(address(i), 7, 0); // Chance GO gives each winner a positive score.
+        }
         uint256 before = pot.available();
+        uint256 budget = before * 60 / 100;
+        uint8[10] memory weights = [25, 18, 13, 10, 8, 7, 6, 5, 4, 4];
+        uint256 expectedReserved;
+        for (uint256 i; i < 10; ++i) {
+            expectedReserved += budget * weights[i] / 100;
+        }
         vm.expectRevert();
         game.finalizeSeason();
         vm.warp(vm.getBlockTimestamp() + 31 days);
         game.finalizeSeason();
-        assertEq(pot.reserved(), before * 60 / 100);
-        assertEq(pot.available(), before * 40 / 100);
+        assertEq(pot.reserved(), expectedReserved);
+        assertEq(pot.available(), before - expectedReserved);
         vm.expectRevert();
         game.finalizeSeason();
         address[10] memory leaders = game.leaders(1);
         for (uint256 i; i < 10; ++i) {
             assertEq(leaders[i], address(uint160(i + 1)));
+            assertGt(game.scores(1, leaders[i]), 0);
+            assertEq(game.prizes(1, leaders[i]), budget * weights[i] / 100);
             vm.prank(leaders[i]);
             game.claimPrize(1);
             vm.prank(leaders[i]);
