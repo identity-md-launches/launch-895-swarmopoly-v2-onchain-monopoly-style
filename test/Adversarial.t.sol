@@ -98,8 +98,7 @@ contract AdversarialTest is SwarmopolyFixture {
 
     function testEveryBoardSlotMatchesClassicBoardAndStartsVacant() public {
         DeedVault fresh = new DeedVault(address(this), address(cash), address(manager));
-        uint8[28] memory properties =
-            [
+        uint8[28] memory properties = [
             uint8(1),
             3,
             5,
@@ -371,11 +370,13 @@ contract AdversarialTest is SwarmopolyFixture {
         vault.sponsorTile(6, 10 ether, 2 ether);
         vm.stopPrank();
         _roll(bob, 6, 99);
+        _roll(bob, 11, 0); // Chance GO earns a score without consuming another sponsor award.
         (, uint256 end,,,) = game.seasons(1);
         vm.warp(end);
         game.finalizeSeason();
         uint256 oldReserved = pot.reserved();
         uint256 prize = game.prizes(1, bob);
+        assertGt(prize, 0, "rollover must exercise an outstanding prize");
         game.startSeason(0, 5 days, 1, 100 ether);
         vm.prank(bob);
         game.joinSeason();
@@ -577,6 +578,9 @@ contract AdversarialTest is SwarmopolyFixture {
         cash.mint(alice, funding);
         vm.prank(alice);
         game.fundPot(funding);
+        for (uint160 i = 1; i <= 10; ++i) {
+            _roll(address(0x200000 + i), 7, 0); // Only positive scores qualify for prizes.
+        }
         uint256 available = pot.available();
         (, uint256 end,,,) = game.seasons(1);
         vm.warp(end);
@@ -587,6 +591,8 @@ contract AdversarialTest is SwarmopolyFixture {
         uint256 budget = available * 60 / 100;
         uint256 distributed;
         for (uint256 i; i < 10; ++i) {
+            assertNotEq(winners[i], address(0), "all ten prize ranks must be exercised");
+            assertGt(game.scores(1, winners[i]), 0);
             uint256 expected = budget * weights[i] / 100;
             assertEq(game.prizes(1, winners[i]), expected, "incorrect rank weight");
             uint256 wallet = cash.balanceOf(winners[i]);

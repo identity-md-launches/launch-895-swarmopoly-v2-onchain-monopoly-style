@@ -110,8 +110,18 @@ contract StatefulAccountingTest is SwarmopolyFixture {
     function invariantLeaderboardContainsExactlyTheBestTen() public view {
         uint256 season = game.currentSeason();
         address[10] memory leaders = game.leaders(season);
+        uint256 positiveScores;
+        for (uint256 u; u < users.length; ++u) {
+            if (game.scores(season, users[u]) != 0) ++positiveScores;
+        }
+        uint256 occupied = positiveScores < 10 ? positiveScores : 10;
         for (uint256 i; i < 10; ++i) {
+            if (i >= occupied) {
+                assertEq(leaders[i], address(0), "zero-score player occupies leaderboard");
+                continue;
+            }
             assertNotEq(leaders[i], address(0));
+            assertGt(game.scores(season, leaders[i]), 0);
             bool known;
             for (uint256 u; u < users.length; ++u) {
                 if (leaders[i] == users[u]) known = true;
@@ -123,11 +133,15 @@ contract StatefulAccountingTest is SwarmopolyFixture {
             if (i > 0) assertTrue(_outranks(leaders[i - 1], leaders[i], season));
         }
         for (uint256 u; u < users.length; ++u) {
+            if (game.scores(season, users[u]) == 0) continue;
             bool listed;
             for (uint256 i; i < 10; ++i) {
                 if (leaders[i] == users[u]) listed = true;
             }
-            if (!listed) assertTrue(_outranks(leaders[9], users[u], season), "better player omitted");
+            if (!listed) {
+                assertEq(occupied, 10, "scoring player omitted from available slot");
+                assertTrue(_outranks(leaders[9], users[u], season), "better player omitted");
+            }
         }
     }
 
@@ -135,6 +149,22 @@ contract StatefulAccountingTest is SwarmopolyFixture {
         uint256 sa = game.scores(season, a);
         uint256 sb = game.scores(season, b);
         return sa > sb || (sa == sb && uint160(a) < uint160(b));
+    }
+
+    function testLeaderboardOracleCoversEmptyPartialAndOverflowingRankings() public {
+        invariantLeaderboardContainsExactlyTheBestTen();
+        for (uint256 i; i < users.length; ++i) {
+            // Seeded deed holders start at 6 and 9; everyone else starts at GO.
+            _roll(users[i], i == 0 ? 11 : i == 1 ? 8 : 7, 0);
+            assertGt(game.scores(1, users[i]), 0);
+            invariantLeaderboardContainsExactlyTheBestTen();
+        }
+        // A scorer omitted from a full board can subsequently take first place.
+        address challenger = users[users.length - 1];
+        _roll(challenger, 7, 0);
+        assertEq(game.leaders(1)[0], challenger);
+        invariantLeaderboardContainsExactlyTheBestTen();
+        invariantAllCustodyAndLiabilitiesReconcile();
     }
 
     // Deterministic reachability check: the campaign must do more than return/revert.

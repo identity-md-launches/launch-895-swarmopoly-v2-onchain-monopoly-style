@@ -6,6 +6,13 @@ Run `forge build` and `forge test`. No RPC, environment writes, FFI, downloads, 
 additional dependencies are required. Fuzz counts (1,000 per new fuzz property)
 and stateful settings (256 runs, depth 96, fail on revert) are in Solidity comments.
 
+The leaderboard revision excludes zero-score joiners. Prize fixtures earn real
+scores through rolls, and the leaderboard invariant checks exactly the best
+positive-score players, allowing empty trailing ranks. A deterministic test
+exercises empty, partial, full and overflowing rankings plus a new first-place
+scorer. Revision regressions also cover same-day parking across season rollover
+and an unresolved old-season roll blocking rejoining until its penalty is paid.
+
 The stateful handler uses twelve players, two tiles sharing a token, all three
 lock choices, pending commitments, deposits/withdrawals, buys, rent claims,
 redemptions, sponsorship topups and claims, donations, pause changes, funding,
