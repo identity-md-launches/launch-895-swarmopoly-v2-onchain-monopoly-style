@@ -87,6 +87,94 @@ contract RevisionRegressionTest is SwarmopolyFixture {
         assertEq(game.player(alice).nonce, 2);
     }
 
+    function testParkingDayPersistsAcrossSameDaySeasonRollover() public {
+        (, uint256 end,,,) = game.seasons(1);
+        vm.warp(end + 12 hours);
+        game.finalizeSeason();
+        uint256[8] memory rents = [uint256(1 ether), 2 ether, 3 ether, 5 ether, 8 ether, 12 ether, 20 ether, 30 ether];
+        game.setParams(10, 1 hours, rents);
+        game.startSeason(0, 1 days, 1 ether, 100 ether);
+        vm.prank(alice);
+        game.joinSeason();
+
+        (, end,,,) = game.seasons(2);
+        vm.warp(end - 3 hours);
+        _roll(alice, 10, 99);
+        uint256 balanceBefore = game.player(alice).balance;
+        _roll(alice, 10, 99);
+        uint256 parkingDay = game.player(alice).parkingDay;
+        assertGt(game.player(alice).balance, balanceBefore, "first parking visit did not pay");
+        assertGt(game.scores(2, alice), 0);
+
+        vm.warp(end);
+        game.finalizeSeason();
+        game.startSeason(0, 1 days, 1 ether, 100 ether);
+        vm.prank(alice);
+        game.joinSeason();
+        assertEq(game.player(alice).parkingDay, parkingDay, "joining cleared daily parking history");
+        _roll(alice, 10, 99);
+        balanceBefore = game.player(alice).balance;
+        uint256 potBefore = pot.available();
+        _roll(alice, 10, 99);
+        assertEq(game.player(alice).position, 20);
+        assertEq(vm.getBlockTimestamp() / 1 days + 1, parkingDay, "visits must share a calendar day");
+        assertEq(game.player(alice).balance, balanceBefore, "rollover paid parking twice in one day");
+        assertEq(pot.available(), potBefore);
+        assertEq(game.scores(3, alice), 0);
+        _checkSolvent();
+    }
+
+    function testOldSeasonPendingRollMustBeResolvedBeforeRejoining() public {
+        (, uint256 end,,,) = game.seasons(1);
+        vm.warp(end - 3601);
+        bytes32 commitment = game.commitmentFor(alice, bytes32(uint256(8)));
+        vm.prank(alice);
+        game.commitRoll(commitment);
+        uint256 nextRoll = game.player(alice).nextRoll;
+        (,,, uint256 exposure,) = game.rolls(alice);
+        uint256 balanceBefore = game.player(alice).balance;
+        vm.warp(end);
+        game.finalizeSeason();
+        game.startSeason(3 ether, 2 days, 1 ether, 100 ether);
+        uint256 walletBefore = cash.balanceOf(alice);
+        uint256 potBefore = pot.available();
+
+        vm.prank(alice);
+        vm.expectRevert(SwarmopolyGame.PendingRoll.selector);
+        game.joinSeason();
+        assertEq(game.player(alice).season, 1);
+        assertEq(game.player(alice).balance, balanceBefore);
+        assertEq(cash.balanceOf(alice), walletBefore, "failed join charged a buy-in");
+        assertEq(pot.available(), potBefore);
+        (bytes32 pending,,,,) = game.rolls(alice);
+        assertEq(pending, commitment);
+
+        vm.prank(bob);
+        game.expireRoll(alice);
+        assertTrue(game.player(alice).bankrupt);
+        assertEq(game.player(alice).balance, balanceBefore - exposure);
+        assertEq(pot.available(), potBefore + exposure);
+        (pending,,, exposure,) = game.rolls(alice);
+        assertEq(pending, bytes32(0));
+        assertEq(exposure, 0);
+
+        vm.prank(alice);
+        game.joinSeason();
+        SwarmopolyGame.Player memory p = game.player(alice);
+        assertEq(p.season, 2);
+        assertFalse(p.bankrupt);
+        assertFalse(p.jailed);
+        assertEq(p.position, 0);
+        assertEq(p.nextRoll, nextRoll);
+        assertEq(p.nonce, 1);
+        assertEq(cash.balanceOf(alice), walletBefore - 3 ether);
+        assertEq(game.scores(1, alice), 0);
+        assertEq(game.scores(2, alice), 0);
+        vm.prank(alice);
+        game.withdraw(p.balance);
+        _checkSolvent();
+    }
+
     function testObservedDustDeedReceivesHolderShare() public {
         uint256 id = _buy(alice, 1, 0);
         uint256 before = pot.available();
