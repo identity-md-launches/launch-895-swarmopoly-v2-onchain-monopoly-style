@@ -1,0 +1,43 @@
+# Local adversarial review
+
+This is the implementation author's review, not an independent audit. No separate contributor or live-value deployment was available. A separate review of contracts, dependencies and final deployment remains required before release.
+
+## Concrete cases considered and addressed
+
+| Attack or failure input | Result and evidence |
+|---|---|
+| Withdraw the entire balance after seeing a committed bad roll | Maximum landing exposure is reserved at commit; excess withdrawal succeeds, reserved withdrawal reverts. Expiry takes that exposure and bankrupts/jails without rewards. Differential fuzzing compares identical commitments revealed versus expired. |
+| Reveal in the commit block, future-entropy block, after either deadline, with a different secret, or twice | Reverts. Successful reveal consumes its domain-separated commitment before interactions. Last valid reveal block and time-expiry are tested. |
+| Change rents/cooldown during an outstanding commitment | `setParams` only works between finalized seasons. Owner cannot increase costs after a player commits. |
+| Hold an unrevealed roll across season finalization | Last-hour commit cutoff and one-hour deadline prevent post-end scoring. Anyone can expire it after finalization. Startup and subsequent joins remain possible. |
+| Send tile tokens directly to the vault before a second buyer | Direct donations cannot change internal assets/shares; tested with a large donation. No balance-based share pricing exists. |
+| Pool returns a partial fill, insufficient output, forged callback, or inconsistent settlement | Exact signed input delta, positive output, caller/context hash, minOut and settled amount are checked. Entire purchase/allowance token transfer rolls back on failure. Callback context is single-use. |
+| Swap hook/token reenters a guarded operation | Game/vault/pot use storage reentrancy guards around custody operations. Callback is the explicit exception: it authenticates manager and the exact active payload, and consumes its context before calling swap. Tests exercise malicious currency reentry and confirm failure without corrupting balances. |
+| ERC20 returns false or no return data | OpenZeppelin SafeERC20 handles both: false reverts atomically, empty successful return is accepted. Tests cover deposit, withdrawal, and retained rent claim on failed transfer. |
+| Owner relists a tile or moves custody | Listing is write-once; no admin withdrawal, delegatecall, selfdestruct, transfer, upgrade or sweep entry points. Unauthorized pot/vault mutations revert. Runtime opcode scanner follows PUSH data boundaries. |
+| Buy after not landing, repeatedly after one landing, with zero minimum, or above maximum | Reverts; one `canBuy` allowance is consumed atomically and restored if swap fails. |
+| New shares claim old rent, lock ignored, or redeemed rent erased | Each lot starts at the current accumulator, weighted lots are separately tracked, unlock time is enforced, and redemption crystallizes pending rent. Tested for 30/90 days and 3:4 weighting. |
+| Old-season rent increases new-season leaderboard | A per-tile season-start accumulator separates scoreable current rent from older claimable rent. Cached scoreable amounts reset lazily per deed on season change. |
+| Rent rounding creates value | Accumulator and claims round down. Repeated claims return zero without new funding. Accounting invariants check paid >= credited >= claimed and vault currency coverage. Dust has no withdrawal path. |
+| Sponsors inflate deed assets or block a roll with token transfer failure | Separate sponsorship liability, one sponsor per tile, O(1) pull credit at landing. Remainder only withdrawable by sponsor after end. |
+| Prior-season prize claims drain new salaries | Prize reservations are excluded from available pot before new season begins. Pull claims reduce only reserved liabilities. Full top-ten distribution/carryover and duplicate claims tested. |
+| Leader inserted twice or stale ordering | Bounded ten-slot insertion updates on every score change and joining; stateful invariants check unique/sorted membership. Address tie-break is deterministic. |
+| Pausing traps funds or pending rolls | Pause affects only new commitments/jail skips and buys. Pending reveal, expiry, withdrawals, redemptions, rent, sponsor and prize claims remain callable. |
+
+## Residual assumptions and limits
+
+- **Requested randomness is not a VRF.** Future blockhash plus a committed secret prevents choosing a seed after seeing that hash, but validators/sequencers can influence, censor or withhold blocks. The timeout penalty removes the tested player balance benefit of withholding; it cannot eliminate sequencer influence, Sybil accounts, offchain deals or value transfers among colluding players. Expiry also removes future roll eligibility so skipping bad outcomes is costly. Real economic deployments should explicitly accept this requested model.
+- **Only standard reviewed tokens are supported.** Internal accounting and the explicit no-`balanceOf` rule mean transfer-tax/rebasing/dishonest tokens cannot be automatically detected. SafeERC20 validates call results, not economic honesty. Such a listing can create insolvency in its asset obligations; IMD dishonesty affects all currency obligations. Admission is an owner review responsibility, not a guarantee provided by the token's ABI. Tokens can also freeze or blacklist withdrawals externally.
+- PoolManager is immutable and was obtained through the specified live hook read. Code presence and metadata verification do not prove its implementation safe. The mock tests the v4 ABI/settlement sequence, not Robinhood's real pool liquidity or a production hook. Independently validate PoolManager provenance and conduct a reviewed pool integration rehearsal before listing real assets.
+- No permissioned rescue exists. Accumulator dust and direct donations are stranded. A wrong one-shot game binding or erroneous permanent listing cannot be upgraded or repaired in place.
+- Pausing cannot stop existing reveals or redemptions. This is deliberate to preserve promised access, but means pause is not an emergency custody freeze. Listing risky assets is irreversible.
+- Owner is immutable; securing its keys and scheduling seasons are operational responsibilities. The owner cannot withdraw user funds but can pause future rolls/buys indefinitely and decide which reviewed pools appear.
+- Scores reward amounts claimed, not a neutral measure of economic skill. Self-rent recycling is possible with a real 20% pot cost; players can also create multiple accounts. No identity/Sybil defense is in scope.
+- Sparse seasons pay only occupied ranks; extra budget carries forward. This is documented rather than silently redistributing fixed prize weights.
+- The static site verifies configured contracts and prompts wallet signatures. It is not an autonomous signer. RPC outages, lost localStorage, rejected signatures and sequencer downtime can cause missed reveals. The site does not invent deployment addresses or claim an unpublished IPFS site is live.
+
+## External technical references consulted
+
+The implementation was checked against [Uniswap v4 flash accounting](https://developers.uniswap.org/docs/protocols/v4/guides/flash-accounting), [the v4 PoolManager implementation](https://github.com/Uniswap/v4-core/blob/main/src/PoolManager.sol), and [Arbitrum Solidity block semantics](https://docs.arbitrum.io/arbitrum-essentials/arbitrum-vs-ethereum/solidity-support). Runtime dependencies are vendored or explicitly configured, so these pages are not needed for building/testing.
+
+Foundry compiler warnings from the lint pass include timestamps (intentional deadlines), bounded casts (dice/packed deltas), post-interaction events within guarded entry points, and context access without a persistent role event (single-call swap context). Solidity compilation succeeds. No Slither/Mythril run or independent audit is claimed.

@@ -1,0 +1,45 @@
+# Game rules and implementation choices
+
+## Accounts and seasons
+
+The owner starts a 1–365 day season with buy-in, positive roll bond, and positive maximum deed purchase. All IMD amounts are raw 18-decimal units. Joining once per season pays the buy-in from the wallet directly into SeasonPot. Approve SwarmopolyGame for buy-ins, play deposits, deed purchases, and optional pot funding. Joining does not fund the play balance.
+
+Anyone can deposit or withdraw their own play balance before, during, and after seasons, including while paused or bankrupt. A committed roll reserves the lesser of the player's current balance and the largest possible landing charge: maximum configured tier rent or the 5 IMD tax. Excess and new deposits remain withdrawable. This temporary reservation is necessary to prevent withdrawing before a bad reveal. The roll bond is the minimum balance to begin a roll, not a separate fee. Play balances and deeds persist across seasons; joining resets position, jail and bankruptcy. Nonces and the last parking reward day persist.
+
+## Board, rolls and jail
+
+There are exactly 40 classic squares. Properties (including four railroads and two utilities) are slots `1,3,5,6,8,9,11,12,13,14,15,16,18,19,21,23,24,25,26,27,28,29,31,32,34,35,37,39`. All 28 are initially vacant. A listing is permanent; it can never be repointed, even after redemption. Each listed pool must have sorted nonzero currencies and pair IMD with a reviewed standard ERC20. Railroads and utilities use their configured rent tier, with no monopoly bonuses or oracle pricing.
+
+Default cooldown is 20 hours from commitment, not reveal. A secret commitment is `keccak256(abi.encode(chainId, game, player, nextNonce, secret))`. Store a cryptographically random 32-byte secret before sending the commitment. Entropy is `keccak256(abi.encode(secret, blockhash(commitBlock + 1), player, nonce))`. Dice are `entropy % 6 + 1` and `(entropy / 6) % 6 + 1`. Reveal must occur strictly after that future block, no later than 200 subsequent EVM blocks, and no later than one hour after commitment. The 200-block bound is within BLOCKHASH retention. The EVM block clock can differ from the RPC's L2 height; the website uses `chainBlockNumber()`.
+
+The last hour of a season is closed to new commitments. Anyone can expire a missed roll once either limit has passed. Expiry forfeits the reserved maximum exposure to the pot, moves the player to jail, disables buying, gives no rewards, and marks the player bankrupt until next season. This deliberately stronger penalty prevents profitable selective withholding even when the chosen roll bond is less than rent. It does not grant the owner access to committed funds. Pending rolls cannot postpone season finalization; their scoring window ends first. Resolve an old pending roll before joining another season.
+
+A timely roll advances 2–12 squares. Passing GO pays salary of 10 bps of the available pot, at most once in that roll. Landing on GO after wrapping already counts as passing. Square 30 sends the player to jail at 10 without another landing event. Visiting square 10 normally is harmless. A jailed player can pay 5 IMD bail (cooldown still applies), or, when the next roll is due, skip that roll and wait another cooldown.
+
+Taxes at 4/38 charge up to 5 IMD, taking only the available play balance. Square 20 pays 50 bps of the available pot at most once per UTC day **per player**. Card squares 2/7/17/22/33/36 use `(entropy >> 16) % 5`: GO (with salary unless already paid), jail, 5 bps pot reward, tax, or no effect. Community Chest uses the same table as Chance. No doubles bonus, extra turns, buildings, or monopoly bonuses are implemented.
+
+## Deeds and rent
+
+After landing on a listed property, a nonbankrupt player may make **one** deed purchase, up to the season's `maxBuy`, until their next commitment or season end. Purchase IMD comes from the wallet, separate from play balance. Positive `minOut` is mandatory. The exact-input swap uses the bound PoolManager's unlock callback, signed deltas, sync/transfer/settle for IMD and take for the output token. Partial input fills revert atomically; output below `minOut` reverts. `quote` simulates that same callback and reverts its swap before settlement, returning a quote for `eth_call`. The website defaults to 1% slippage and expires quotes after 60 seconds; the onchain transaction enforces the submitted minimum output, not a time deadline.
+
+Each purchase creates a numbered, non-transferable deed lot. Shares equal output assets for an empty tile, otherwise floor(output × existing shares / internal assets). Accounting never uses token `balanceOf`. Donations cannot inflate shares or dilute later buyers. Sponsors and rent do not change deed asset/share ratios. Direct donations are not withdrawable and should not be used to fund the game.
+
+Default rent tiers are 1/2/3/5/8/12/20/30 IMD. Listed tiles charge rent even if no deeds have yet been purchased. If holders exist, 80% (rounded down) of the actual amount paid funds their weighted accumulator, with the balance going to the pot. If no holders exist, the full rent goes to the pot. A player unable to pay full rent pays their entire balance and becomes bankrupt until next season. Rent is not skipped for a holder landing on their own tile. Bankruptcy blocks rolling/buying, not withdrawals, redemption, rent or prize claims.
+
+No optional lock means redemption after 24 hours, with weight 2 × shares. A 30-day lock gives weight 3 × shares (1.5×); a 90-day lock gives weight 4 × shares (2×). These are separate lots: buying another deed does not extend an older lot. A boosted lot keeps its weight until redeemed after maturity; it does not silently decay. Redemption burns all shares of that lot and returns its pro-rata tile tokens. There is no token sale back to IMD. Unclaimed rent survives redemption.
+
+Rent uses 1e27 accumulator precision, rounds down at credit and claim, and leaves rounding dust in the vault without an owner sweep. Claims cannot exceed funded rent. Only rent earned during the current season and claimed before its end contributes to that season's score. Old rent can always be claimed but cannot be banked for a future season's leaderboard. A claimant must have joined the current season to score.
+
+## Sponsorship and prizes
+
+One sponsor can fund each tile per season in the tile token; the same sponsor can top up at the same per-landing rate. This keeps landing cost bounded. Each landing credits min(remaining, perLanding) to the lander's pull claim. The lander claims from DeedVault; token transfer failures therefore do not block the dice roll. Sponsor funds and awarded claims are accounted separately from deed assets. After the season timestamp ends, the sponsor can withdraw the unused remainder. Awarded but unclaimed rewards stay reserved for their landers. Sponsor rewards are not score.
+
+Score is salary + parking + Chance payments + qualifying rent claimed, denominated in IMD. The game maintains a unique top ten on each score update and on joining. Equal scores use ascending numeric address as a deterministic tie-break; zero-score joiners are eligible if fewer than ten higher scorers exist. This is an address game, with no identity or Sybil resistance.
+
+At the end, anyone can finalize once. A 60% budget is calculated from the pot's **available** balance, excluding old reserved prizes. Ranks receive 25/18/13/10/8/7/6/5/4/4 percent of that budget. With ten winners and exact divisibility, 40% carries forward. Unoccupied ranks and rounding stay in the available pot; occupied ranks are not reweighted. Prize liabilities are reserved before a new season starts and claimed individually through the game. They never expire and cannot be used by later salaries or seasons.
+
+## Administrative scope
+
+Owner is immutable and explicitly supplied to every constructor. Pot and vault have one-shot owner-only binding to a game that reports matching dependencies. The owner can list vacant tiles, start a new season after finalization, pause new rolls and/or buys, and set economics **between seasons**. Salary is capped at 50 bps, each rent tier at 1,000 IMD, and cooldown at 1–48 hours. Tax, bail, parking and Chance amounts are fixed. Pausing never blocks pending reveals, timeouts, play withdrawals, redemption, rent claims, sponsorship withdrawals, finalization or prizes.
+
+There is no owner withdrawal, sweep, upgrade, ownership reassignment, ETH entry point, signature delegation, or transferable deed interface. Standard ERC20 behavior and the reviewed PoolManager/hook remain necessary trust assumptions; see the review.

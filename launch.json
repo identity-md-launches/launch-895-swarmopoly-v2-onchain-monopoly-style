@@ -1,0 +1,9 @@
+{
+  "kind": "evm_contracts",
+  "contracts": [
+    {"contract": "SeasonPot", "constructorArgs": ["$owner", "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127"]},
+    {"contract": "DeedVault", "constructorArgs": ["$owner", "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127", "0x8366a39CC670B4001A1121B8F6A443A643e40951"]},
+    {"contract": "SwarmopolyGame", "constructorArgs": ["$owner", "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127", "$contract:DeedVault", "$contract:SeasonPot"]}
+  ],
+  "notes": "Target chain 4663. PoolManager read from poolManager() on hook 0x19bec7c2e1b2aadaf67b259744751a9960d66000; evidence in docs/network-verification.json. No token, pool or upgrade deployment. After deployment the owner must call bindGame(game) on SeasonPot and DeedVault, review and list pools, and start a season. These explicit one-shot bindings are required by this application's brief. No transactions were broadcast by this assignment. See docs/DEPLOYMENT.md and docs/REVIEW.md before release."
+}

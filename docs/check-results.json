@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-07",
+  "compiler": "0.8.26",
+  "forgeBuild": "pass",
+  "forgeTest": "pass",
+  "forgeFmtCheck": "pass",
+  "foundryReportedTests": 29,
+  "unitAndFuzzTests": 28,
+  "fuzzRunsPerTest": 256,
+  "invariantPredicates": 4,
+  "invariantRuns": 128,
+  "invariantDepth": 64,
+  "invariantCalls": 8192,
+  "invariantReverts": 0,
+  "siteSmokeTests": 2,
+  "siteSyntax": "pass",
+  "runtimeBytes": {
+    "SeasonPot": 1831,
+    "DeedVault": 9660,
+    "SwarmopolyGame": 13632
+  },
+  "liveDeployment": false,
+  "independentAudit": false
+}

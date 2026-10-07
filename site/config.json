@@ -1,0 +1,13 @@
+{
+  "label": "swarmopoly",
+  "chainId": 4663,
+  "chainName": "Robinhood Chain",
+  "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+  "explorerUrl": "https://robin.etherscan.io",
+  "currency": "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
+  "poolManager": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+  "game": null,
+  "vault": null,
+  "pot": null,
+  "deploymentBlock": null
+}
