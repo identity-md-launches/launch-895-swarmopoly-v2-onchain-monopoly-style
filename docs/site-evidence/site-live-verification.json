@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-10-07T16:46:12.375Z",
+  "chainId": 4663,
+  "deploymentBlock": 82454371,
+  "deploymentBlockHash": "0x9291cb5496f8e175019fcdb7211ec126681464cf8518cb1a2a4b25037ca344d1",
+  "abiHashes": {
+    "SeasonPot": "0x7af39e324d984ce950c934349cf3fd2bfb04d390a606c841f5536dd656bea927",
+    "DeedVault": "0x6874e0e9f6b9684135984c7986e88b2935078971f0883c79c6b088d7518a6680",
+    "SwarmopolyGame": "0x19f7ca862ec6d3f9ee38dbd176dffbe4ab728a9f71a00dcea91723fc1b0eb9ff"
+  },
+  "codeAndDependencies": "pass",
+  "currentSeason": "0",
+  "potAvailableWei": "0",
+  "listedTiles": 0,
+  "potGame": "0x0000000000000000000000000000000000000000",
+  "vaultGame": "0x0000000000000000000000000000000000000000",
+  "primaryHistory": "Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode",
+  "historyRange": {
+    "from": 82454371,
+    "to": 82459370,
+    "logs": 0
+  },
+  "transactionsSent": 0
+}

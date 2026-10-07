@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "name": "launch, no wallet, navigation, mobile ordering, local assets, keyboard, axe",
+      "result": "pass"
+    },
+    {
+      "name": "wallet join, approval amount, deposit, withdrawal, pot funding and account reset",
+      "result": "pass"
+    },
+    {
+      "name": "persisted commit, EVM reveal clock, dice landing, quote invalidation, deed locks, claim and redeem",
+      "result": "pass"
+    },
+    {
+      "name": "owner visibility, bindGame one-shot state, listing, parameters, pause and season start",
+      "result": "pass"
+    },
+    {
+      "name": "wrong wallet chain offers a switch and returns to the same game",
+      "result": "pass"
+    },
+    {
+      "name": "Chance relocation, jail bars and bail recovery",
+      "result": "pass"
+    }
+  ]
+}

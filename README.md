@@ -1,24 +1,74 @@
 # Swarmopoly v2
 
-An immutable three-contract daily board game for Robinhood Chain (4663), using the existing 18-decimal IMD token. Includes a self-contained static website, offline Foundry dependencies, unit/fuzz/stateful tests, and a deployment manifest. No token or pool is created.
+The live IMD board game on **Robinhood Chain, chain ID 4663**, now styled as the Swarmopoly arcade table. Source is in `site/`; the complete static export is in `dist/`. All runtime assets, including ethers, Space Grotesk, ABIs and rules, are local. The website works at an IPFS gateway subpath without rewrites or a CDN.
+
+This continuation changes no Solidity, dependencies, Foundry configuration or contract deployment. The existing IMD token remains `0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127`.
+
+| Contract | Live address |
+| --- | --- |
+| SwarmopolyGame | `0xa5ae5282aa914a4ce689f1609462e2a5eaa2490d` |
+| DeedVault | `0x5a3dc16c23447f70c414145118ee2e9984260482` |
+| SeasonPot | `0xd77f768d634328bdfa826051457c974f4028a6dc` |
+
+Deployment block: **82454371**. `site/config.json` pins the launch. Reads verify chain ID, deployed code, currency, PoolManager, owners and contract dependencies before enabling transactions. Publicnode is the first RPC; the supplied mainnet RPC handles historical logs when Publicnode refuses archive requests. Board/player/deed history is indexed in bounded batches, with a visible progress state. At validation time the live contracts had no season, no listed tiles and an empty pot; those are inviting launch states, not fabricated gameplay.
+
+## Build and preview
+
+Requires Node.js 22+ for build/check scripts. No package install is needed to build or serve this native-module site.
 
 ```sh
-forge build
-forge test
-forge fmt --check
-python3 -m http.server 8080 --directory site
+node site/build.mjs
+python3 -m http.server 8080 --directory .
 ```
 
-Solidity is pinned to **0.8.26**, Cancun, optimizer 200, via IR, without metadata CBOR or bytecode hash. The verifier supplies the compiler. No network, environment variables, filesystem cheatcodes, or FFI are used by tests. All Solidity imports and the browser's ethers library are ordinary vendored files. `out/` and `cache/` are disposable.
+Open `http://localhost:8080/dist/`. Serving over HTTP is required; opening `index.html` directly as a file will block its module/JSON requests. `node site/build.mjs` replaces only `dist/` using a runtime asset allowlist. After editing `site/`, always rebuild and include the resulting export in the submission. The export contains 12 files and is approximately 655 KB uncompressed.
 
-- [Rules and assumptions](docs/RULES.md)
-- [Deployment parameters and operator handoff](docs/DEPLOYMENT.md)
-- [Security review and limitations](docs/REVIEW.md)
-- [Read-only chain evidence](docs/network-verification.json)
-- [Test coverage](docs/TESTING.md)
+## Install validation tools and check
 
-The application has **not been deployed or published** by this assignment. The PoolManager was queried from the supplied hook, and code/chain/currency metadata were checked. `launch.json` is ready for the deployment service. `site/config.json` deliberately has no invented application addresses; the site displays its launch state until a verified deployment handoff is applied.
+The original `site/package.json` is preserved. Additional checking tools and their exact lockfile live in `site/tooling/`. Install them outside the repository so caches and dependencies cannot enter the submission:
 
-The Swarmopoly v1 job's screenshot/source was not included in the inputs. The delivered visual treatment is a dark olive dashboard with a classic sage 40-square board, colored property bands, daily dice, and IMD account panels. Exact visual matching to job `55ae5ec7` remains subject to that reference becoming available.
+```sh
+mkdir -p /tmp/swarmopoly-tools
+cp site/tooling/package.json site/tooling/package-lock.json /tmp/swarmopoly-tools/
+npm ci --prefix /tmp/swarmopoly-tools --cache /tmp/swarmopoly-npm-cache
+PLAYWRIGHT_BROWSERS_PATH=/tmp/swarmopoly-browsers /tmp/swarmopoly-tools/node_modules/.bin/playwright install chromium
+node site/build.mjs
+/tmp/swarmopoly-tools/node_modules/.bin/tsc --project site/tsconfig.json
+node --test test/site.test.mjs
+CHECK_PACKAGE=/tmp/swarmopoly-tools/package.json PLAYWRIGHT_BROWSERS_PATH=/tmp/swarmopoly-browsers node test/site-browser.mjs
+```
 
-Third-party vendoring: OpenZeppelin Contracts v5.0.2 (used files only), forge-std v1.9.7 (`src`), ethers v6.13.5 (browser ESM bundle). Their licenses are included alongside the code. The v4 interface is an ABI-compatible minimal subset; the PoolManager itself is external and is never redeployed here.
+The typecheck uses TypeScript `checkJs` over the complete application and pure presentation helpers. A small declaration file marks the ABI-dynamic vendored ethers boundary; it does not typecheck third-party minified code. Browser tests start their own local server under `/preview/`, use the production export, and exercise real ethers encoding with a local JSON-RPC/wallet fixture. They never send a live transaction.
+
+Actual results and scoped Better Interface review are in [docs/SITE-VALIDATION.md](docs/SITE-VALIDATION.md). Production build and typecheck passed; all eight source/export tests and six browser scenarios passed. Automated accessibility checks found no violations in the inspected desktop, mobile, populated purchase and Rules states. Live reads and historical fallback were also checked. Real wallet-extension signing, mainnet writes, physical devices, native screen readers and IPFS pin propagation were not tested.
+
+## Publish
+
+Publish the **contents of `dist/`** as the site named **`swarmopoly`**. The contributor publisher must serve this export; it does not need to rebuild. Relative module, font, CSS and JSON URLs work at `/ipfs/<CID>/`; navigation uses hashes and Rules has its own exported page.
+
+For a separately operated IPFS node:
+
+```sh
+ipfs add --cid-version=1 --recursive dist
+```
+
+Pin the returned directory CID, verify its `index.html`, then point the hosting service’s `swarmopoly` name at that CID. This workspace has no IPFS CLI or publication credentials, so no CID or public URL is claimed here. The complete export is ready for the assignment’s publishing service.
+
+## Using the game
+
+Explore without a wallet. Connect an injected Ethereum-compatible wallet; use **Add Robinhood Chain** if needed. Join an active season, then deposit a play balance. Joining, deed purchases and pot contributions spend IMD from the wallet separately. The UI approves exact amounts. Keep ETH in the wallet for gas.
+
+Rolling is commit then reveal: keep the tab open and confirm both wallet requests. The secret is saved before the commit signature; download it from **Save recovery secret** while pending. Returning to the same origin and wallet can resume a roll. If a new IPFS CID changes the browser origin, restore the exported secret in recovery controls. A missed deadline forfeits the reserved balance; the UI retains recovery and expired-roll resolution. EVM block time, not RPC block height, gates reveals.
+
+My Swarm includes deposit/withdraw, lock countdowns, claimable rent and redemption. The big Claim rent action submits one transaction per deed and stops if a request fails or is declined. “None” on the lock card still has the contract’s 24-hour minimum; House locks 30 days and Hotel 90 days. Leaderboard & pot includes funding, prize claims and season finalization. Owner controls appear only for the immutable owner and explain permanent one-shot binding, listing, parameters, pauses and season creation. No owner action was performed by this job.
+
+## Project documents and licenses
+
+- [Implemented design system](DESIGN.md)
+- [Website validation and limitations](docs/SITE-VALIDATION.md)
+- [Game rules](docs/RULES.md) and exported [player rules](site/rules.html)
+- [Original deployment handoff](docs/DEPLOYMENT.md), [contract security review](docs/REVIEW.md), [contract test coverage](docs/TESTING.md)
+
+The older contract documents describe the original build job; the live addresses and website status above supersede their pre-deployment website notes. Contract tests remain available via `forge test` with the existing pinned configuration; they were not rerun for this frontend-only change.
+
+Original vendoring remains OpenZeppelin Contracts v5.0.2, forge-std v1.9.7 and ethers v6.13.5, with their included licenses. Space Grotesk is copied from the Swarmopoly v1 project and includes its OFL. The six original player shapes and corner icons are implemented as local inline SVG geometry. Better Interface/Impeccable guidance attribution and license texts are preserved in [docs/INTERFACE-LICENSE.txt](docs/INTERFACE-LICENSE.txt). No submodule, registry archive, generated dependency directory or cache is part of this deliverable.
